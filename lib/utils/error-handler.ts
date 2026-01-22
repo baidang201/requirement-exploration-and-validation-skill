@@ -194,7 +194,7 @@ export function extractKeywords(text: string): string[] {
   const words = text
     .toLowerCase()
     .split(/\s+/)
-    .filter(w => w.length > 2 && !stopWords.has(w));
+    .filter(w => w.length >= 2 && !stopWords.has(w));
 
   return [...new Set(words)];
 }

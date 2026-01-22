@@ -10,6 +10,7 @@ import { createChildLogger } from '../utils/logger';
 const logger = createChildLogger('ProductHunt');
 const rssParser = new Parser();
 const PRODUCT_HUNT_RSS_URL = 'https://www.producthunt.com/feed';
+const PRODUCT_HUNT_GRAPHQL_URL = 'https://api.producthunt.com/v2/api/graphql';
 
 /**
  * 从 Product Hunt RSS 获取数据
@@ -19,7 +20,7 @@ async function fetchProductHuntRSS(): Promise<TrendingItem[]> {
     const feed = await rssParser.parseURL(PRODUCT_HUNT_RSS_URL);
     const items = (feed.items || [])
       .slice(0, 30)
-      .map(item => ({
+      .map((item: Parser.Item) => ({
         title: item.title || '未知项目',
         description: item.contentSnippet || item.content || '',
         url: item.link || '',
@@ -28,7 +29,7 @@ async function fetchProductHuntRSS(): Promise<TrendingItem[]> {
         publishedAt: new Date(item.isoDate || item.pubDate || Date.now()),
         relevanceScore: 0
       }))
-      .filter(item => item.url);
+      .filter((item: TrendingItem) => Boolean(item.url));
 
     logger.info(`✓ Product Hunt RSS: ${items.length} 条`);
     return items;
@@ -52,42 +53,11 @@ export async function fetchProductHuntData(
   }
 
   try {
-    const response = await fetchWithRetry(
-      'https://api.producthunt.com/v2/posts',
-      {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Accept': 'application/json'
-        }
-      },
-      {
-        maxRetries: 2,
-        initialDelay: 1000,
-        maxDelay: 5000,
-        backoffMultiplier: 2
-      }
-    );
+    const apiResults = await fetchProductHuntAPI(apiKey);
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json() as any;
-    const posts = data.posts || [];
-
-    const results = posts.map((post: any) => ({
-      title: post.name,
-      description: post.tagline || post.description || '',
-      url: post.url || `https://www.producthunt.com/posts/${post.slug}`,
-      tags: post.topics?.map((t: any) => t.name) || [],
-      platform: 'Product Hunt',
-      publishedAt: new Date(post.created_at),
-      relevanceScore: 0
-    }));
-
-    if (results.length > 0) {
-      logger.info(`✓ Product Hunt API: ${results.length} 条`);
-      return results;
+    if (apiResults.length > 0) {
+      logger.info(`✓ Product Hunt API: ${apiResults.length} 条`);
+      return apiResults;
     }
 
     logger.warn('Product Hunt API 返回空数据，改用 RSS 数据源');
@@ -97,4 +67,76 @@ export async function fetchProductHuntData(
     logger.info('改用 RSS 数据源');
     return fetchProductHuntRSS();
   }
+}
+
+/**
+ * 使用 GraphQL API 获取 Product Hunt 数据
+ */
+async function fetchProductHuntAPI(apiKey: string): Promise<TrendingItem[]> {
+  const query = `
+    query LatestPosts($first: Int!) {
+      posts(order: RANKING, first: $first) {
+        edges {
+          node {
+            name
+            tagline
+            description
+            slug
+            url
+            createdAt
+            topics(first: 5) {
+              edges {
+                node {
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const response = await fetchWithRetry(
+    PRODUCT_HUNT_GRAPHQL_URL,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        query,
+        variables: { first: 30 }
+      })
+    },
+    {
+      maxRetries: 2,
+      initialDelay: 1000,
+      maxDelay: 5000,
+      backoffMultiplier: 2
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const data = await response.json() as any;
+  const edges = data?.data?.posts?.edges || [];
+
+  return edges
+    .map((edge: any) => edge?.node)
+    .filter((node: any) => Boolean(node))
+    .map((node: any) => ({
+      title: node.name,
+      description: node.tagline || node.description || '',
+      url: node.url || `https://www.producthunt.com/posts/${node.slug}`,
+      tags: node.topics?.edges?.map((edge: any) => edge.node?.name).filter(Boolean) || [],
+      platform: 'Product Hunt',
+      publishedAt: new Date(node.createdAt),
+      relevanceScore: 0
+    }))
+    .filter((item: TrendingItem) => Boolean(item.url));
 }

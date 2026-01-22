@@ -2,6 +2,7 @@
  * 需求挖掘与验证系统 - 主入口
  */
 
+import 'dotenv/config';
 import { loadConfig } from './utils/yaml-parser';
 import { logger, LogLevel } from './utils/logger';
 import { collectTrendingData, generateSeedProjects } from './data-collector';

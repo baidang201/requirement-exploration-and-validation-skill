@@ -24,6 +24,7 @@ function filterByProjectTypes(
 ): TrendingItem[] {
   // 提取项目类型关键词
   const keywords = extractKeywords(projectTypes.join(' '));
+  logger.info(`提取的关键词: ${keywords.join(', ')}`);
 
   return items.filter(item => {
     const text = `${item.title} ${item.description} ${item.tags.join(' ')}`.toLowerCase();
@@ -38,9 +39,17 @@ function filterByProjectTypes(
 
     item.relevanceScore = Math.min(relevance, 100);
 
-    // 相关性阈值
-    return item.relevanceScore > 30 || keywords.length === 0;
+    // 降低相关性阈值：只需匹配1个关键词即可通过（>= 20）
+    return item.relevanceScore >= 20 || keywords.length === 0;
   });
+
+  // 调试信息：显示前3个项目的匹配情况
+  if (items.length > 0) {
+    logger.info('前3个项目的匹配情况：');
+    items.slice(0, 3).forEach(item => {
+      logger.info(`  - ${item.title}: relevance=${item.relevanceScore}`);
+    });
+  }
 }
 
 /**
