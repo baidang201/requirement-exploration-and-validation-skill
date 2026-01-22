@@ -1,0 +1,81 @@
+name: Daily Requirement Exploration
+
+on:
+  schedule:
+    - cron: '0 1 * * *'  # UTC 1:00 = 北京时间 9:00
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  explore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx claude-code --version
+
+      - name: Create output directory
+        run: mkdir -p outputs
+
+      - name: Run exploration skill
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PRODUCT_HUNT_API_KEY: ${{ secrets.PRODUCT_HUNT_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          USER_PROFILE_PATH: config/user-profile.yaml
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          OUTPUT_FILE="outputs/report-$TIMESTAMP.md"
+
+          npx claude-code skill run requirement-exploration-and-validation \
+            --config config/user-profile.yaml \
+            --output "$OUTPUT_FILE" || true
+
+          echo "Report generated at $OUTPUT_FILE"
+
+      - name: Upload report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exploration-report-${{ github.run_number }}
+          path: outputs/report-*.md
+          retention-days: 30
+
+      - name: Commit report to repository
+        run: |
+          git config --local user.email "github-action[bot]@users.noreply.github.com"
+          git config --local user.name "github-action[bot]"
+
+          # 添加生成的报告
+          git add outputs/ || true
+
+          # 提交（如果有更改）
+          git commit -m "chore: daily exploration report $(date +%Y-%m-%d)" || exit 0
+
+          # 推送到仓库
+          git push || true
+
+      - name: Create summary
+        run: |
+          echo "## 📊 Exploration Report Generated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date**: $(date +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ✅ Success" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📁 Report files:" >> $GITHUB_STEP_SUMMARY
+          ls -lh outputs/ >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "## ❌ Exploration Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date**: $(date +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+          echo "**Error**: Check the logs for details" >> $GITHUB_STEP_SUMMARY

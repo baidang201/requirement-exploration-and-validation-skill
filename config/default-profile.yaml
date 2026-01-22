@@ -1,0 +1,38 @@
+profile:
+  # 项目类型方向
+  project_types:
+    - "AI SaaS 工具"
+    - "Chrome 插件"
+
+  # 执行人背景
+  background:
+    name: "默认用户"
+    role: "全栈开发者"
+    skills:
+      - { name: "JavaScript", level: "intermediate", years: 2 }
+      - { name: "React", level: "intermediate", years: 1 }
+      - { name: "Node.js", level: "beginner", years: 0.5 }
+    experience:
+      - "2 年 Web 开发经验"
+      - "曾独立开发并运营 2 个小工具"
+    constraints:
+      time_budget: "每周 15 小时"
+      monetary_budget: 2000  # USD
+
+  # 执行人现有资源
+  resources:
+    technical:
+      - "Vercel 免费账号"
+      - "OpenAI API Key"
+      - "GitHub 账号"
+    distribution:
+      - "Twitter 账号（500 粉丝）"
+      - "个人博客"
+    other: []
+
+  # 评分权重配置
+  scoring_weights:
+    blue_ocean: 0.4      # 蓝海分权重
+    match_score: 0.3     # 匹配度权重
+    market_heat: 0.2     # 市场热度权重
+    feasibility: 0.1     # 可行性权重
